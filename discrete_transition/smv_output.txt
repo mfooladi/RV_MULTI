@@ -13,28 +13,45 @@
 *** See http://www.cs.chalmers.se/Cs/Research/FormalMethods/MiniSat
 *** Copyright (c) 2003-2005, Niklas Een, Niklas Sorensson 
 
--- specification !( F x.state = 38 &  G !(x.state = 82))  is false
+-- specification !(( F x.state = 38 &  F x.state = 63) &  F x.state = 69)  is false
 -- as demonstrated by the following execution sequence
 Trace Description: LTL Counterexample 
 Trace Type: Counterexample 
 -> State: 1.1 <-
-  x.state = 20
+  x.state = 110
 -> State: 1.2 <-
-  x.state = 64
+  x.state = 111
 -> State: 1.3 <-
-  x.state = 49
+  x.state = 57
 -> State: 1.4 <-
-  x.state = 51
+  x.state = 69
 -> State: 1.5 <-
-  x.state = 68
+  x.state = 56
 -> State: 1.6 <-
-  x.state = 26
+  x.state = 63
 -> State: 1.7 <-
+  x.state = 56
+-> State: 1.8 <-
+  x.state = 54
+-> State: 1.9 <-
+  x.state = 42
+-> State: 1.10 <-
+  x.state = 26
+-> State: 1.11 <-
+  x.state = 58
+-> State: 1.12 <-
+  x.state = 91
+-> State: 1.13 <-
+  x.state = 20
+-- Loop starts here
+-> State: 1.14 <-
+  x.state = 48
+-> State: 1.15 <-
   x.state = 38
 -- Loop starts here
--> State: 1.8 <-
-  x.state = 116
--> State: 1.9 <-
-  x.state = 72
--> State: 1.10 <-
-  x.state = 116
+-> State: 1.16 <-
+  x.state = 48
+-> State: 1.17 <-
+  x.state = 20
+-> State: 1.18 <-
+  x.state = 48

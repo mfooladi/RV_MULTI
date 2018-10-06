@@ -9,23 +9,47 @@ import time
 from Tkinter import *
 from operator import add
 import JarvisMarch
-# import discrete_path_plannar
 import os
 import subprocess
 import os.path
 from PIL import Image, ImageDraw
 import sys
-
+import tkFont as tkfont
+# ======================================================================================================================================
+# Initial parameteres
+# ======================================================================================================================================
 r1_geometry = 'robot1'
 r2_geometry = 'robot2'
-r2_pos_init = [2.6, 1.1]
-r1_pos_init = [9.1, 4.5]
+r1_pos_init = [1.6, 0.4]
+r2_pos_init = [9.1, .5]
 r1_goals = 'goals_robot1'
 r2_goals = 'goals_robot2'
-
+# ======================================================================================================================================
+# Simulation parameteres
+# ======================================================================================================================================
+trajectory = []
+pixelsize = 780
+framedelay = 1
+drawVels = True
+QUIT = False
+paused = False
+step = False
+circle = []
+velLine = []
+gvLine = []
+Grid = []
+dt = .05
+ittr = 0
+maxIttr = 100000
+globalTime = 0
+# ======================================================================================================================================
+# Set directory path
+# ======================================================================================================================================
 parent_dir = os.path.dirname(__file__) + '/../..'
 parent_directory = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
-
+# ======================================================================================================================================
+# Discrete path planner
+# ======================================================================================================================================
 def discrete_planner(geometry_name, init_position, goals_file = 'goals', goal_list = [], temp_obstacle = 0):
 	
 	os.popen('triangle -Bnevgu {}.poly'.format(parent_directory + '/geometry/' + geometry_name))  # -n is for producing the neighbor
@@ -162,10 +186,14 @@ def discrete_planner(geometry_name, init_position, goals_file = 'goals', goal_li
 	text_file2 = open(parent_directory + '/discrete_transition/state_order_{}.txt'.format(geometry_name), 'w')
 	text_file2.write('\n'.join(state))
 	text_file2.close()
-
+# ======================================================================================================================================
+# Find discrete plans for the agents
+# ======================================================================================================================================
 discrete_planner(r1_geometry, r1_pos_init, r1_goals)
 discrete_planner(r2_geometry, r2_pos_init, r2_goals)
-
+# ======================================================================================================================================
+# Vertice Class
+# ======================================================================================================================================
 class Vertice(object):
 	def __init__(self, geometry_name):
 		with open(parent_directory + '/geometry/{}.1.node'.format(geometry_name)) as vpos:
@@ -178,10 +206,12 @@ class Vertice(object):
 			vertice = filter(None, vertice)
 			vertice = map(float, vertice[1:3])
 			self.vertices_coords_temp.append(vertice)
-	
-	def position(self, tri):
-		return self.vertices_coords_temp[tri - 1]
-
+	# position return the position of the vertice number position(vertice_number)
+	def position(self, vertice):
+		return self.vertices_coords_temp[vertice - 1]
+# ======================================================================================================================================
+# Triangle Class - vertice numbers, vertice positions, neighbor triangles, common vertices between any two triangle
+# ======================================================================================================================================
 class Triangle(Vertice):
 	def __init__(self, geometry_name):
 		super(Triangle, self).__init__(geometry_name)
@@ -221,16 +251,18 @@ class Triangle(Vertice):
 	
 	def common_vertices(self, tri1, tri2):
 		return [value for value in self.triangle_nodes[tri1 - 1] if value in self.triangle_nodes[tri2 - 1]]
-
+# ======================================================================================================================================
+# State Class
+# ======================================================================================================================================
 class State(Triangle):
 	def __init__(self, geometry_name):
 		super(State, self).__init__(geometry_name)
-		self.state_list = ''
+		# self.state_list = ''
 		with open(parent_directory + '/discrete_transition/state_order_{}.txt'.format(geometry_name)) as state:
 			self.state_list = state.readlines()
 		state.close()
 		self.state_total_number = len(self.state_list)
-		# if self.sta
+		print self.state_list
 		self.last_state = self.state_list[-1]
 		self.gs = []
 		self.global_vertex_index = []
@@ -482,7 +514,9 @@ class State(Triangle):
 					for i in range(patch_length_pre, min([patch_length_pre + patch_length, self.state_total_number + 1])):
 						self.plot_vf_one_triangle(i, patch_num)
 				plt.show()
-
+# ======================================================================================================================================
+# Robot Class
+# ======================================================================================================================================
 class Robot(State):
 	def __init__(self, geometry_name, agent_radius, agent_id, v_max, goals_file, init_pos = [0., 0.]):
 		super(Robot, self).__init__(geometry_name)
@@ -557,8 +591,6 @@ class Robot(State):
 			self.is_new_state = False
 		else:
 			self.is_new_state = True
-			# #print '*********************************************'
-			# #print 'transition'
 		return self.is_new_state
 	
 	def move(self, current_pos, current_vel, current_state = 1, current_patch = 1, dt = 0.05):
@@ -622,6 +654,7 @@ class Robot(State):
 					self.current_patch = current_patch + 1
 			else:
 				self.curent_velocity = np.array(self.vector_field_point(self.next_posotion, self.current_patch, self.current_state, self.v_max)[0])
+				# print 'velocity =', self.curent_velocity
 		else:
 			self.curent_velocity = np.array(self.vector_field_point(self.next_posotion, self.current_patch, self.current_state, self.v_max)[0])
 		
@@ -634,7 +667,7 @@ class Robot(State):
 	
 	def collision_check(self, p1, p2, v1, v2, agent_id, teammate_id):  # Velocity Obstacle method
 		g_set_1 = []
-		radius_total = self.agent_radius * 3.
+		radius_total = self.agent_radius * 2.5
 		distance_u2u = np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 		# #print 'distance between the UAVs:::::', distance_u2u
 		theta_half = math.asin(radius_total / max(distance_u2u, radius_total))
@@ -738,7 +771,7 @@ class Robot(State):
 			self.velocity_arrow_image = canvas.create_line(velocity_arrow_coords, fill = 'white')
 			self.velocity_ref_image = canvas.create_line(velocity_ref_coords, fill = 'red')
 			self.not_created = False
-		
+			
 		canvas.coords(self.velocity_arrow_image, velocity_arrow_coords)
 		canvas.coords(self.velocity_ref_image, velocity_ref_coords)
 		canvas.coords(self.poly, tuple(polygon_gs))
@@ -748,11 +781,13 @@ class Robot(State):
 	
 	def manual_drive(self, dt):
 		if self.waypoint != [0.,0.]:
+			chk_image = canvas.create_image(-200, -100, image = chk)
+			canvas.coords(chk_image,(self.waypoint[0]-world_xmin)*world_scale, (self.waypoint[1]-world_ymin)*world_scale)
 			er_pos = [self.waypoint[0] - self.current_position[0], self.waypoint[1] - self.current_position[1]]
-			# #print 'error pos', er_pos, 'waypoint', self.waypoint, self.current_position, 'current pos'
+			# print 'error pos', er_pos, 'waypoint', self.waypoint, self.current_position, 'current pos'
 			er_pos_mag = np.sqrt(er_pos[0] ** 2 + er_pos[1] ** 2)
 			vel_dir = [value/er_pos_mag for value in er_pos]
-			vel_vector = [value * self.v_max * 0.6 for value in vel_dir]
+			vel_vector = [value * self.v_max * 0.9 for value in vel_dir]
 			# print 'vel direction', vel_dir, 'vel manual', vel_vector
 			self.curent_velocity = vel_vector
 			self.current_position = [self.current_position[0] + self.curent_velocity[0] * dt, self.current_position[1] + self.curent_velocity[1] * dt]
@@ -760,27 +795,10 @@ class Robot(State):
 				self.waypoint = [0., 0.]
 				self.curent_velocity = [0., 0.]
 				self.reinitial = True
-# =====================================================================================================================================================================================
-# Simulation parameteres
-# =====================================================================================================================================================================================
-trajectory = []
-pixelsize = 780
-framedelay = 1
-drawVels = True
-QUIT = False
-paused = False
-step = False
-circle = []
-velLine = []
-gvLine = []
-Grid = []
-dt = .05
-ittr = 0
-maxIttr = 100000
-globalTime = 0
-# =====================================================================================================================================================================================
+				canvas.delete(chk_image)
+# ======================================================================================================================================
 # Collision Avoidance
-# =====================================================================================================================================================================================
+# ======================================================================================================================================
 def collision_avoidance(agent_1,agent_2):
 	radius_total = (agent_1.agent_radius + agent_2.agent_radius) * 1.7
 	
@@ -850,21 +868,17 @@ def collision_avoidance(agent_1,agent_2):
 		for i in range(0,len(g_set_1)):
 			g_set_ordered.append(g_set_1[np.mod(zero_point_index + i, len(g_set_1))])
 		
-		max_r = 0.
-		max_l = 0.
 		v_optimal = [[], []]
-		v_sides = [False, False]
 		best_diff_vref = [0,0]
 		v_best = []
 		is_collision = False
-		# print '*', is_point_in_tri(v1, [v2_1, p_vo_right, p_vo_left]), v1, v2_1, p_vo_right, p_vo_left, r1.agent_id
+		
 		if is_point_in_tri(v1, [v2_1, p_vo_right, p_vo_left]): # if the current velocity is in the RVO, collision will happen
 			v_optimal = [[],[]]
-			# print 'collision detected'
 			is_collision = True
 			side_r = p_vo_right - v2_1
 			side_l = p_vo_left - v2_1
-			# print 'sider, sidel', side_r, side_l
+			
 			if side_r[0] == 0:
 				c_r = p_vo_right[0]
 			else:
@@ -1032,6 +1046,7 @@ def collision_avoidance(agent_1,agent_2):
 	# 		elif v2_dir[0] == False:
 	# 			agent_1.curent_velocity = v1_opt[1]
 	# 			print 'left avoidance'
+	
 	def decide_velocity(v1_opt, v2_opt, diff1, diff2, v1_best, v2_best):
 		if v1_opt[0] == None and v1_opt[1] == None:
 			v1_final = [0., 0.]
@@ -1050,8 +1065,8 @@ def collision_avoidance(agent_1,agent_2):
 				v2_final = v2_opt[1]
 				v1_final = v1_opt[1]
 			elif v2_opt[0] != None:
-				agent_1.temp_obs = int(agent_2.triangle_number(agent_2.current_state))
-				agent_2.temp_obs = int(agent_1.triangle_number(agent_1.current_state))
+				agent_1.temp_obs = int(agent_2.triangle_number(agent_2.current_state+1))
+				agent_2.temp_obs = int(agent_1.triangle_number(agent_1.current_state+1))
 				agent_1.reinitial = True
 				agent_2.reinitial = True
 				v1_final = [0., 0.]
@@ -1063,8 +1078,8 @@ def collision_avoidance(agent_1,agent_2):
 				v1_final = v1_opt[0]
 				v2_final = v2_opt[0]
 			elif v2_opt[1] != None:
-				agent_1.temp_obs = int(agent_2.triangle_number(agent_2.current_state))
-				agent_2.temp_obs = int(agent_1.triangle_number(agent_1.current_state))
+				agent_1.temp_obs = int(agent_2.triangle_number(agent_2.current_state+1))
+				agent_2.temp_obs = int(agent_1.triangle_number(agent_1.current_state+1))
 				
 				agent_1.reinitial = True
 				agent_2.reinitial = True
@@ -1092,12 +1107,14 @@ def collision_avoidance(agent_1,agent_2):
 		return v1_final, v2_final
 					
 	is_colliding = False
-	if agent_1.auto == True and agent_1.is_finished == False:
+	# if agent_1.auto == True and agent_1.is_finished == False:
+	if agent_1.auto == True:
 		# v1_optimal, v1_sidechecks, is_colliding, plot_param1 = collision_free_velocity(agent_1, agent_2) # v1_optimal = [v_r_optimal, v_l_optimal], if n/a v_r/l_optimal = [],
 		v1_optimal, diff1, v1_best, is_colliding, plot_param1 = collision_free_velocity(agent_1, agent_2) # v1_optimal = [v_r_optimal, v_l_optimal], if n/a v_r/l_optimal = [],
 		# print 'is colliding?', is_colliding
 		if is_colliding:  # this is to avoid check collision for the agent_2 if no collision is detected
-			if agent_2.auto == True and agent_2.is_finished == False:
+			if agent_2.auto == True:
+			# if agent_2.auto == True and agent_2.is_finished == False:
 				print 'collision while both in auto mode'
 				v2_optimal, diff2, v2_best, is_colliding, plot_param2 = collision_free_velocity(agent_2, agent_1)
 				# v2_optimal, v2_sidechecks, is_colliding, plot_param2 = collision_free_velocity(agent_2, agent_1)
@@ -1155,7 +1172,7 @@ def collision_avoidance(agent_1,agent_2):
 			y2_v = round((ro1.current_position[1] - world_ymin + v_optimal[1]) * world_scale)
 			x1_v_ref = round((ro1.current_position[0] - world_xmin) * world_scale)
 			y1_v_ref = round((ro1.current_position[1] - world_ymin) * world_scale)
-			# print 'v1', v1, 'agent number==', ro1.agent_id
+			print 'v1', v1, 'agent number==', ro1.agent_id
 			x2_v_ref = round((ro1.current_position[0] - world_xmin + v1[0]) * world_scale)
 			y2_v_ref = round((ro1.current_position[1] - world_ymin + v1[1]) * world_scale)
 			velocity_arrow_coords = tuple([x1_v, y1_v, x2_v, y2_v])
@@ -1204,10 +1221,9 @@ def collision_avoidance(agent_1,agent_2):
 	
 		
 	return is_colliding
-		
-# =====================================================================================================================================================================================
+# ======================================================================================================================================
 # initialize the agents
-# =====================================================================================================================================================================================
+# ======================================================================================================================================
 def initWorld(canvas):
 	global r1_goals_polygons, r2_goals_polygons, r1_poly_pix, r2_poly_pix, image1
 	for i, node in enumerate(robot1.triangle_nodes):
@@ -1247,9 +1263,9 @@ def initWorld(canvas):
 	win.update()
 	canvas.postscript(file = 'snap.ps', colormode = 'color')
 	os.system('convert snap.ps snap.gif')
-# ======================================================================================================================
+# ======================================================================================================================================
 # draw the agents
-# ======================================================================================================================
+# ======================================================================================================================================
 def drawWorld():
 	global r1_goals_polygons, r2_goals_polygons, r1_poly_pix, r2_poly_pix
 	var_r1_auto.set('Auto={}'.format(robot1.auto))
@@ -1279,10 +1295,9 @@ def drawWorld():
 	traj2_canvas = canvas.create_rectangle(traj2, fill='green', outline='green')
 	canvas.lift(traj1_canvas)
 	canvas.lift(traj2_canvas)
-	
-# ======================================================================================================================
+# ======================================================================================================================================
 # keyboard events
-# ======================================================================================================================
+# ======================================================================================================================================
 def on_key_press(event):
 	global paused, step, QUIT, drawVels
 	
@@ -1313,6 +1328,7 @@ def on_key_press(event):
 	if event.keysym == "2":
 		if robot2.auto == False:
 			robot2.reinitial = True
+			
 			robot2.auto = True
 		else:
 			if robot1.auto == False:
@@ -1326,9 +1342,9 @@ def on_key_press(event):
 		
 		if robot2.auto == False:
 			robot2.reinitial = True
-# ======================================================================================================================
+# ======================================================================================================================================
 # update the simulation
-# ======================================================================================================================
+# ======================================================================================================================================
 def updateSim(dt):
 	current_distance = np.sqrt((robot1.current_position[0] - robot2.current_position[0]) ** 2 + (robot1.current_position[1] - robot2.current_position[1]) ** 2)
 	# if not robot1.is_finished and robot1.auto == True:
@@ -1346,11 +1362,11 @@ def updateSim(dt):
 	elif robot2.auto == False:
 		robot2.manual_drive(dt)
 
-	if current_distance < 5.0:
+	if current_distance < 2.0:
 		is_collision = collision_avoidance(robot1, robot2)
-# =====================================================================================================================================================================================
+# ======================================================================================================================================
 # read geometry
-# =====================================================================================================================================================================================
+# ======================================================================================================================================
 def readScenario(geometry, scalex = 1., scaley = 1.):
 	global x_in, y_min
 	x_min = 0 * scalex - 1.
@@ -1358,12 +1374,13 @@ def readScenario(geometry, scalex = 1., scaley = 1.):
 	x_max = 10 * scalex + 1.
 	y_max = 10 * scaley + 1.
 	return x_min, x_max, y_min, y_max
-# =====================================================================================================================================================================================
+# ======================================================================================================================================
 # simulate and draw frames
-# =====================================================================================================================================================================================
+# ======================================================================================================================================
 quit_asked = False
+output_trajectory = open('Desired_Trajectory.txt', 'a')
 def drawFrame(dt):
-	global start_time, step, paused, ittr, globalTime, quit_asked
+	global start_time, step, paused, ittr, globalTime, quit_asked, output_trajectory
 	if ittr > maxIttr or QUIT or quit_asked:  # Simulation Loop
 		#print("%s itterations ran ... quitting" % ittr)
 		win.destroy()
@@ -1374,18 +1391,16 @@ def drawFrame(dt):
 			updateSim(dt)
 			ittr += 1
 			globalTime += dt
+			output_trajectory.write(str(globalTime)+'\t'+str(robot1.current_position[0])+'\t'+str(robot1.current_position[1])+'\n')
+			
 		drawWorld()
 		if step == True:
 			step = False
 			paused = True
 		win.after(framedelay, lambda: drawFrame(dt))
-# ======================================================================================================================
+# ======================================================================================================================================
 # Main execution of the code
-# ======================================================================================================================
-robot1 = Robot(r1_geometry, .13, 1, 2., r1_goals, r1_pos_init)
-robot2 = Robot(r2_geometry, .13, 2, 2., r2_goals, r2_pos_init)
-geometry = robot1.geometry_name
-world_xmin, world_xmax, world_ymin, world_ymax = readScenario(geometry)
+# ======================================================================================================================================
 def callback(event):
 	point = [event.x / world_scale + world_xmin, event.y / world_scale + world_ymin]
 	print 'clicked at ', point
@@ -1393,6 +1408,17 @@ def callback(event):
 		robot1.waypoint = point
 	if robot2.auto == False:
 		robot2.waypoint = point
+
+def quit(event):
+	win.destroy()
+
+def restart(event):
+	os.execl(sys.executable, sys.executable, *sys.argv)
+
+robot1 = Robot(r1_geometry, .13, 1, 1.8, r1_goals, r1_pos_init)
+robot2 = Robot(r2_geometry, .13, 2, 1.8, r2_goals, r2_pos_init)
+geometry = robot1.geometry_name
+world_xmin, world_xmax, world_ymin, world_ymax = readScenario(geometry)
 world_width = world_xmax - world_xmin
 world_height = world_ymax - world_ymin
 world_scale = pixelsize / world_width
@@ -1404,7 +1430,20 @@ quad1 = PhotoImage(file = 'quad1.gif')
 quad1 = quad1.subsample(35, 35)
 quad2 = PhotoImage(file = 'quad2.gif')
 quad2 = quad2.subsample(35, 35)
-label_r1 = Label(frame, image = quad1, relief = RAISED)
+chk = PhotoImage(file = 'chk1.gif')
+chk = chk.subsample(125, 125)
+bold_font = tkfont.Font(family="Helvetica", size=16, weight="bold")
+bold_fon2 = tkfont.Font(family="Helvetica", size=14)
+
+label_r3 = Label(frame,image=chk)
+label_r3.pack()
+label_r3.place(x=1085, y= 570, width = 25, height = 25)
+
+label_r4 = Label(frame,text='Requested \n Waypoint', font=bold_font)
+label_r4.pack()
+label_r4.place(x=1020, y= 520, width = 150, height = 50)
+
+label_r1 = Label(frame, image = quad1, relief = RAISED, font='bold')
 label_r1.pack()
 label_r1.place(x=10, y= 300, width = 80, height = 50)
 label_r2 = Label(frame, image = quad2, relief = RAISED)
@@ -1412,23 +1451,39 @@ label_r2.pack()
 label_r2.place(x=10, y= 350, width = 80, height = 50)
 var_r1_auto = StringVar()
 var_r2_auto = StringVar()
-label_r1_auto = Label(frame, textvariable=var_r1_auto, relief=RAISED, width = 30)
+vsr = StringVar()
+
+
+label_r1_auto = Label(frame, textvariable=var_r1_auto, relief=RAISED, width = 50, font=bold_font)
 label_r1_auto.pack()
-label_r1_auto.place(x=90, y=300, width = 80, height = 50)
-label_r2_auto = Label(frame, textvariable=var_r2_auto, relief=RAISED, width = 30)
+label_r1_auto.place(x=90, y=300, width = 90, height = 50)
+label_r2_auto = Label(frame, textvariable=var_r2_auto, relief=RAISED, width = 50, font=bold_font)
 label_r2_auto.pack()
-label_r2_auto.place(x=90, y=350, width = 80, height = 50)
-
-def quit(event):
-	win.destroy()
-
-def restart(event):
-	os.execl(sys.executable, sys.executable, *sys.argv)
-
+label_r2_auto.place(x=90, y=350, width = 90, height = 50)
 q_button = Button(win, text = "Quit", width = 6, command = quit)
 q_button.place(x = 50, y = 50)
+
 res_button = Button(frame, text = "Restart", width = 6, command = lambda frame = frame: restart())
 res_button.place(x = 50, y = 80)
+r1visited=Label(frame, text = "reached goals", width = 100, bg='#ffffcc', font=bold_fon2)
+r1visited.pack()
+r1visited.place(x=1020, y=300, width = 140, height = 50)
+r1Nvisited=Label(frame, text = "Not reached goals", width = 100, bg='#ffff00', font=bold_fon2)
+r1Nvisited.pack()
+r1Nvisited.place(x=1020, y=250, width = 140, height = 50)
+r2visited=Label(frame, text = "reached goals", width = 100, bg='#66ff66')
+r2visited.pack()
+r2visited.place(x=1020, y=450, width = 140, height = 50)
+r2Nvisited=Label(frame, text = "Not reached goals", width = 100, bg='#006600')
+r2Nvisited.pack()
+r2Nvisited.place(x=1020, y=400, width = 140, height = 50)
+uav1=Label(frame, text = "UAV #1", width = 50,font = bold_font)
+uav1.pack()
+uav1.place(x=1020, y=230, width = 150, height = 20 )
+uav2=Label(frame, text = "UAV #2", width = 50,font = bold_font)
+uav2.pack()
+uav2.place(x=1020, y=380, width = 150, height = 20 )
+
 q_button.bind("<Button-1>", quit)
 res_button.bind("<Button-1>", restart)
 win.bind("<Button-2>", callback)
@@ -1444,7 +1499,6 @@ win.geometry("+{}+{}".format(2500,  100))
 canvas = Canvas(frame, width = pixelsize, height = pixelsize * world_height / world_width, background = "#4c4c4c")
 canvas.pack()
 canvas.place(x=200, y=0)
-white = (255, 255, 255)
 image1 = Image.new("RGB", (pixelsize/2, int(pixelsize * world_height / world_width)/2))
 draw = ImageDraw.Draw(image1)
 initWorld(canvas)
@@ -1457,6 +1511,7 @@ trajectory_image_2 = PhotoImage(file = 'trajectory_im_2.gif')
 trajectory_image_2 = trajectory_image_2.subsample(800, 800)
 uav_1_image = canvas.create_image(200, 100, image = quad1)
 uav_2_image = canvas.create_image(200, 100, image = quad2)
-
+chk_image = canvas.create_image(-200, -100, image = chk)
+# canvas.create_polygon()
 mainloop()
 
